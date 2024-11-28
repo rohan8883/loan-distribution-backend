@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import PlansMapping from '../models/plansMapping.model.js';
+import Month from '../models/planMaster.model.js';
 import Joi from 'joi';
 
 // ════════════════════════════║  API TO Create Role   ║═════════════════════════════════//
@@ -242,62 +243,114 @@ export async function deletePlanById(req, res) {
 }
 
 // get planMapping by monthId and planId
+// export async function getPlanMappingByMonthAndPlanId(req, res) {
+//   const { id } = req.query;
+//   try {
+//     const match = [
+//       {
+//         $match: {
+//           _id: new mongoose.Types.ObjectId(id)
+//         }
+//       }
+//     ];
+//     const planMapping = await PlansMapping.aggregate([
+//       ...match,
+//       {
+//         $lookup: {
+//           from: 'tbl_plans_mstrs',
+//           localField: 'planId',
+//           foreignField: '_id',
+//           as: 'plan'
+//         }
+//       },
+//       {
+//         $unwind: '$plan'
+//       },
+//       {
+//         $lookup: {
+//           from: 'tbl_month_mstrs',
+//           localField: 'monthId',
+//           foreignField: '_id',
+//           as: 'month'
+//         }
+//       },
+//       {
+//         $unwind: '$month'
+//       },
+//       {
+//         $project: {
+//           _id: 1,
+//           amount: 1,
+//           status: 1,
+//           monthId: 1,
+//           planId: 1,
+//           plan: '$plan.planName',
+//           month: '$month.monthName'
+//         }
+//       }
+//     ]);
+//     if (!planMapping) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'Plan Mapping not found'
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       data: planMapping[0]
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message
+//     });
+//   }
+// }
+
 export async function getPlanMappingByMonthAndPlanId(req, res) {
-  const { id } = req.query;
+  const { id, amount, percents } = req.body; // Extract data from body
   try {
-    const match = [
+    // Aggregate pipeline to fetch the data
+    const planMapping = await Month.aggregate([
       {
         $match: {
-          _id: new mongoose.Types.ObjectId(id)
-        }
-      }
-    ];
-    const planMapping = await PlansMapping.aggregate([
-      ...match,
-      {
-        $lookup: {
-          from: 'tbl_plans_mstrs',
-          localField: 'planId',
-          foreignField: '_id',
-          as: 'plan'
+          id: new mongoose.Types.ObjectId(id) // Match by monthId
         }
       },
       {
-        $unwind: '$plan'
-      },
-      {
         $lookup: {
-          from: 'tbl_month_mstrs',
+          from: 'tbl_month_mstrs', // Join with month collection
           localField: 'monthId',
           foreignField: '_id',
           as: 'month'
         }
       },
       {
-        $unwind: '$month'
+        $unwind: '$month' // Flatten the month array
       },
       {
         $project: {
-          _id: 1,
-          amount: 1,
-          status: 1,
-          monthId: 1,
-          planId: 1,
-          plan: '$plan.planName',
-          month: '$month.monthName'
+          _id: 0, // Exclude _id from the result
+          month: '$month.monthName',
+          amount: {
+            $add: [amount, { $multiply: [amount, percents / 100] }] // Calculate amount with percents
+          }
         }
       }
     ]);
-    if (!planMapping) {
+
+    if (!planMapping.length) {
       return res.status(404).json({
         success: false,
-        message: 'Plan Mapping not found'
+        message: 'No data found for the given monthId'
       });
     }
 
+    // Response as an array
     return res.status(200).json({
       success: true,
-      data: planMapping[0]
+      data: planMapping
     });
   } catch (error) {
     return res.status(500).json({
@@ -306,6 +359,8 @@ export async function getPlanMappingByMonthAndPlanId(req, res) {
     });
   }
 }
+
+
 
 export async function getAllPlanMappingActive(req, res) {
   try {
