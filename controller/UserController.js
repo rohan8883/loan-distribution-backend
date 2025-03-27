@@ -32,7 +32,7 @@ export async function CreateUserWithImage(req, res) {
           ulbId,
           imageUrl: req.file?.filename,
           address,
-          fullImgUrl: `http://localhost:8008/${req.file?.filename}`
+          fullImgUrl: `${process.env.BACKEND_URL}/${req?.file?.filename}`
         });
         return res.status(200).json({
           success: true,
@@ -242,6 +242,7 @@ export async function GetUser(req, res) {
           country: 1,
           states: 1,
           city: 1,
+          gymName:1,
           imageUrl: 1,
           status: 1,
           roleId: 1,
@@ -333,9 +334,9 @@ export async function GetUser(req, res) {
 // ════════════════════════════║  API TO Upload User Profile Image  ║═════════════════════════════════//
 
 export async function UploadProfileImage(req, res) {
-  const upload = uploadFile('./uploads/profile');
+  const upload = await uploadFile('./uploads/profile');
   try {
-    upload.single('imageUrl')(req, res, async (err) => {
+    await upload.single('imageUrl')(req, res, async (err) => {
       if (err) {
         res.status(400).json(err.message);
       } else {
@@ -364,29 +365,18 @@ export async function UploadProfileImage(req, res) {
 // ════════════════════════════║  API TO Update User Data  ║═════════════════════════════════//
 
 export async function UpdateUser(req, res) {
-  const { id } = req.params;
-
-  // =======================================
-  const upload = uploadFile('./uploads/profile');
+  
   try {
-    upload.single('imageUrl')(req, res, async (err) => {
-      if (err) {
-        res.status(400).json(err.message);
-      } else {
-        const { fullName, mobile, roleId, address } = req.body;
-        const getUserData = await Users.findOne({ _id: id });
-        console.log(getUserData);
+        const { fullName, mobile, roleId, address, gymName, zipCode} = req.body;
         const updateUser = await Users.findOneAndUpdate(
-          { _id: id },
+          { _id: req.user?._id },
           {
             fullName,
             mobile,
             roleId,
-            imageUrl: req.file ? req.file?.filename : getUserData.imageUrl,
-            fullImgUrl: req.file
-              ? `http://localhost:8008/${req.file?.filename}`
-              : getUserData.fullImgUrl,
-            address
+            address,
+            gymName,
+            zipCode
           },
           {
             new: true
@@ -397,8 +387,7 @@ export async function UpdateUser(req, res) {
           userDetails: updateUser,
           message: 'Successfully updated'
         });
-      }
-    });
+     
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

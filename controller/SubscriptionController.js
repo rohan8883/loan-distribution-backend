@@ -7,7 +7,9 @@ import Member from '../models/members.modal.js';
 import MonthMaster from '../models/monthMaster.model.js';
 import PlanMaster from '../models/planMaster.model.js';
 import ExpiredSub from '../models/expiredSub.js';
-async function creteSubs(memberId, planMappingId, customStartDate) {
+import User from '../models/user.model.js';
+async function creteSubs(memberId, planMappingId, customStartDate,req) {
+  const ownerId = req?.user?._id;
   try {
     const plan = await PlanMapping.findById(planMappingId);
     const monthMstr = await MonthMaster.findById(plan.monthId);
@@ -66,7 +68,8 @@ async function creteSubs(memberId, planMappingId, customStartDate) {
         : moment(lastDate).add(month, 'months').toISOString(),
       amount,
       paidAmount,
-      dueAmount
+      dueAmount,
+      createdById: ownerId
     });
     const newSubscription = await subscription.save();
 
@@ -111,7 +114,7 @@ export const createNewSubscription = async (req, res) => {
     const subscription = Promise.all(
       subscriptionData.map(async (item) => {
         const { planMappingId } = item;
-        const subs = await creteSubs(memberId, planMappingId, customStartDate);
+        const subs = await creteSubs(memberId, planMappingId, customStartDate,req);
         data = subs;
       })
     );
@@ -200,6 +203,7 @@ export const getDueSubscription = async (req, res) => {
 
 // update subscription by id and paidAmount and dueAmount and paidStatus 1 if paidAmount is equal to amount then paidStatus will be 1 else 2 and dueAmount will be amount - paidAmount body data array
 export const updateSubscription = async (req, res) => {
+  const ownerId = req.user._id;
   const { memberId, subData } = req.body;
   try {
     const member = await Member.findById(memberId);
@@ -237,7 +241,7 @@ export const updateSubscription = async (req, res) => {
 
     await subscription;
 
-    const receiptCount = await Receipt.countDocuments();
+    const receiptCount = await Receipt.find({createdById:ownerId}).countDocuments();
 
     const receipt = new Receipt({
       memberId,
@@ -250,6 +254,7 @@ export const updateSubscription = async (req, res) => {
         amount: item.amount,
         planName: item.planName,
         month: item.month,
+        createdById:ownerId,
         prevDueAmount: item.prevDueAmount,
         paidStatus: item.paidAmount == item.amount ? 1 : 2
       })),
@@ -323,7 +328,14 @@ export const getAllReceipts = async (req, res) => {
         from: 'tbl_members',
         localField: 'memberId',
         foreignField: '_id',
-        as: 'member'
+        as: 'member',
+        pipeline: [
+          {
+            $match: {
+              ...(req.user.roleId =='67193213e0e76d08635e31fb'?{}:{createdById: new mongoose.Types.ObjectId(req?.user?._id)}),
+            }
+          }
+        ]
       }
     },
     { $unwind: '$member' },
@@ -342,7 +354,7 @@ export const getAllReceipts = async (req, res) => {
         $match: {
           $or: [
             { receiptNo: { $regex: new RegExp(q, 'i') } },
-            { paymentMode: { $regex: new RegExp(q, 'i') } }
+            { paymentMode: { $regex: new RegExp(q, 'i') } },
           ]
         }
       });
@@ -374,9 +386,11 @@ export const getAllReceipts = async (req, res) => {
 };
 
 // get receipt by id
+
 export const getReceiptById = async (req, res) => {
   const { id } = req.params;
   try {
+   
     const receipts = await Receipt.findOne({ _id: id })
       .populate('subscriptionId.subscriptionId')
       .populate('memberId');
@@ -387,11 +401,13 @@ export const getReceiptById = async (req, res) => {
         message: 'No record found!'
       });
     }
+    const userDetails = await User.findOne({_id:receipts?.memberId?.createdById });
 
     return res.status(200).json({
       success: true,
       message: 'Fetched successfully.',
-      data: receipts
+      data: receipts,
+      userDetails:userDetails
     });
   } catch (error) {
     return res.status(500).json({

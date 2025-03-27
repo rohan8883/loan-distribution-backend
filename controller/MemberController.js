@@ -10,8 +10,235 @@ import mongoose from 'mongoose';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
+  
+// env of multi user db ====>   mongodb+srv://rohansingh9135:Rohan!123!456@cluster0.irrxqdp.mongodb.net/multiusergymdb?retryWrites=true&w=majority&appName=Cluster0
+
+
+export const createOwnerNew = async (req, res) => {
+  const upload = await uploadFile('./uploads/profile');
+  try {
+    await upload.single('imageUrl')(req, res, async (err) => {
+      if (err) {
+        return res.status(400).json({ message: err.message, success: false });
+      }
+      const {
+        fullName,
+        gymName,
+        address,
+        mobile,
+        password,
+        email,
+      } = req.body;
+
+      const userExists = await User.findOne({ mobile: mobile });
+      if (userExists) {
+        return res.status(400).json({
+          message: 'User already exists with this mobile number',
+          success: false
+        });
+      }
+
+      const hashPassword = await hash(String(password ?? '12345678'));
+      const user = new User({
+        fullName: fullName,
+        gymName,
+        roleId: '676e3938d0f5a92c824fc662',
+        mobile,
+        email,
+        password: hashPassword,
+        imageUrl: req?.file?.filename,
+        address,
+        fullImgUrl: `${process.env.BACKEND_URL}/${req?.file?.filename}`
+      });
+      const newUser = await user.save();
+
+      if (!newUser._id) {
+        return res.status(400).json({ message: 'User not created', success: false });
+      }
+
+      return res.status(201).json({
+        message: 'User created successfully',
+        success: true,
+        data: newUser
+      });
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message, success: false });
+  }
+};
+
+
+export const getAllOwners = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const ownerRoleId = '676e3938d0f5a92c824fc662'; // Make sure this matches the roleId used in createOwnerNew
+
+    const totalOwners = await User.countDocuments({ roleId: ownerRoleId });
+    const owners = await User.find({ roleId: ownerRoleId })
+      .select('-password') // Exclude password from the response
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 }); // Sort by creation date, newest first
+
+    if (!owners.length && page !== 1) {
+      return res.status(404).json({
+        message: 'No owners found for this page',
+        success: false
+      });
+    }
+
+    return res.status(200).json({
+      message: 'Owners retrieved successfully',
+      success: true,
+      data: {
+        owners,
+        totalDocs: totalOwners,  // Total number of owners
+        limit,                   // Limit per page
+        page,                    // Current page
+        totalPages: Math.ceil(totalOwners / limit),  // Total number of pages
+        pagingCounter: (skip + 1), // The first document number of the current page
+        hasPrevPage: page > 1,   // Whether the previous page exists
+        hasNextPage: page * limit < totalOwners, // Whether the next page exists
+        prevPage: page > 1 ? page - 1 : null, // The previous page number
+        nextPage: page * limit < totalOwners ? page + 1 : null // The next page number
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error retrieving owners',
+      error: error.message,
+      success: false
+    });
+  }
+};
+
+
+export const getOwnerById = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'users not found.'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Get user Details by id successfully.',
+      data: user
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+
+export const updateOwnerById = async (req, res) => {
+  const { id } = req.params;
+  const upload = await uploadFile('./uploads/profile');
+
+  try {
+    const owner = await User.findById(id);
+    if (!owner) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Owner not found' });
+    }
+
+    await upload.single('imageUrl')(req, res, async (err) => {
+      if (err) {
+        return res.status(200).json({ message: err.message });
+      }
+
+      const {
+        fullName,
+        address,
+        mobile,
+        email,
+        imageUrl = req?.file?.filename,
+        fullImgUrl = `${process.env.BACKEND_URL}/${req?.file?.filename}`
+      } = req.body;
+
+      if (req.file) {
+        // if image is uploaded then delete previous image
+        // fs?.unlinkSync(`./uploads/profile/${member?.imageUrl}`);
+        const updatedOwner = await User.findByIdAndUpdate(
+          id,
+          {
+            fullName,
+            address,
+            mobile,
+            email,
+            imageUrl,
+            fullImgUrl
+          },
+          { new: true }
+        );
+        return res.status(200).json({
+          success: true,
+          data: updatedOwner,
+          message: 'Owner updated with image'
+        });
+      }
+
+      const updatedOwner = await User.findByIdAndUpdate(
+        id,
+        {
+          fullName,
+          address,
+          mobile,
+          email,
+        },
+        { new: true }
+      );
+      return res.status(200).json({
+        success: true,
+        data: updatedOwner,
+        message: 'Owner updated without image'
+      });
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const updateOwnerStatusById = async(req, res) =>{
+  const { id } = req.params;
+  try {
+    const owner = await User.findById(id);
+    if (!owner) {
+      return res.status(404).json({
+        success: false,
+        message: 'Owner not found'
+      });
+    }
+    owner.status = owner.status === 1 ? 0 : 1;
+    await owner.save();
+    return res.status(200).json({
+      success: true,
+      message: 'Owner status updated successfully',
+      data: owner
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+}
 
 export const createMemberNew = async (req, res) => {
+  const ownerId = req.user._id;
   const upload = await uploadFile('./uploads/profile');
   try {
     await upload.single('imageUrl')(req, res, async (err) => {
@@ -38,7 +265,7 @@ export const createMemberNew = async (req, res) => {
           success: false
         });
       }
-
+ 
       const hashPassword = await hash(String('123456'));
       const user = new User({
         fullName: memberName,
@@ -48,6 +275,7 @@ export const createMemberNew = async (req, res) => {
         password: hashPassword,
         imageUrl: req?.file?.filename,
         address,
+        // createdById:usersId,
         fullImgUrl: `${process.env.BACKEND_URL}/${req?.file?.filename}`
       });
       const newUser = await user.save();
@@ -58,13 +286,13 @@ export const createMemberNew = async (req, res) => {
           .json({ message: 'User not created', success: false });
       }
 
-      const generated = await Member.find().countDocuments();
+      const generated = await Member.find({createdById:ownerId}).countDocuments();
       const generatedCode =
         gender == 'male'
           ? `M-${('0000' + (generated + 1)).slice(-5)}`
           : gender == 'female'
-          ? `F-${('0000' + (generated + 1)).slice(-5)}`
-          : `O-${('0000' + (generated + 1)).slice(-5)}`;
+            ? `F-${('0000' + (generated + 1)).slice(-5)}`
+            : `O-${('0000' + (generated + 1)).slice(-5)}`;
 
       const member = new Member({
         generatedId: generatedCode,
@@ -75,6 +303,7 @@ export const createMemberNew = async (req, res) => {
         dob,
         email,
         gender,
+        createdById:ownerId,
         planMappingId: JSON.parse(planMappingId),
         weight,
         imageUrl: req?.file?.filename,
@@ -94,6 +323,7 @@ export const createMemberNew = async (req, res) => {
 
 // get all members with pagination aggregate query q=
 export const getAllMembers = async (req, res) => {
+  const ownerId = req.user._id;
   const { page = 1, limit = 10, q, status } = req.query;
   try {
     const options = { page, limit };
@@ -105,7 +335,13 @@ export const getAllMembers = async (req, res) => {
         }
       }
     ];
-
+    if(req.user.roleId == '676e3938d0f5a92c824fc662'){
+      query.push({
+        $match: {
+          createdById: new mongoose.Types.ObjectId(ownerId)
+        }
+      });
+    }
     if (q) {
       query.push({
         $match: {
@@ -327,10 +563,13 @@ export const getMemberById = async (req, res) => {
         }
       }
     ]);
+
+    const userDetails = await User.findOne({_id:MemberData[0]?.createdById });
+
     return res.status(200).json({
       success: true,
       message: 'Member found',
-      data: { ...MemberData[0], ExpStatus }
+      data: { ...MemberData[0], ExpStatus,userDetails }
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

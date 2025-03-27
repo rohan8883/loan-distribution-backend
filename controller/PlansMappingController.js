@@ -1,18 +1,19 @@
 import mongoose from 'mongoose';
 import PlansMapping from '../models/plansMapping.model.js';
-import Month from '../models/planMaster.model.js';
 import Joi from 'joi';
 
 // ════════════════════════════║  API TO Create Role   ║═════════════════════════════════//
 
 export async function CreatePlans(req, res) {
+  const ownerId = req.user._id;
   const { planMappingName, planId, amount, monthId } = req.body;
   try {
     const newPlans = new PlansMapping({
       planId,
       amount,
       monthId,
-      planMappingName
+      planMappingName,
+      createdById:ownerId,
     });
 
     await newPlans.save();
@@ -31,10 +32,74 @@ export async function CreatePlans(req, res) {
 }
 
 // get all plans
+// export async function getAllPlans(req, res) {
+//   try {
+//     //  join with tbl_plans_mstrs and tbl_month_mstrs
+//     const plans = await PlansMapping.aggregate([
+//       {
+//         $lookup: {
+//           from: 'tbl_plans_mstrs',
+//           localField: 'planId',
+//           foreignField: '_id',
+//           as: 'plan'
+//         }
+//       },
+//       {
+//         $unwind: '$plan'
+//       },
+//       {
+//         $lookup: {
+//           from: 'tbl_month_mstrs',
+//           localField: 'monthId',
+//           foreignField: '_id',
+//           as: 'month'
+//         }
+//       },
+//       {
+//         $unwind: '$month'
+//       },
+//       {
+//         $project: {
+//           _id: 1,
+//           planMappingName: 1,
+//           amount: 1,
+//           status: 1,
+//           monthId: 1,
+//           planId: 1,
+//           plan: '$plan.planName',
+//           month: '$month.monthName',
+//           createdAt: 1
+//         }
+//       }
+//     ]);
+//     return res.status(200).json({
+//       success: true,
+//       data: plans
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message
+//     });
+//   }
+// }
+
 export async function getAllPlans(req, res) {
+  const ownerId = req.user._id;  
+  const isOwner = req.user.roleId === '676e3938d0f5a92c824fc662'; 
+
   try {
-    //  join with tbl_plans_mstrs and tbl_month_mstrs
-    const plans = await PlansMapping.aggregate([
+    let query = [];
+
+    if (isOwner) {
+      query.push({
+        $match: {
+          createdById: new mongoose.Types.ObjectId(ownerId) 
+        }
+      });
+    }
+
+    query.push(
       {
         $lookup: {
           from: 'tbl_plans_mstrs',
@@ -70,7 +135,11 @@ export async function getAllPlans(req, res) {
           createdAt: 1
         }
       }
-    ]);
+    );
+
+    // Execute the aggregation pipeline (with or without owner filter)
+    const plans = await PlansMapping.aggregate(query);
+
     return res.status(200).json({
       success: true,
       data: plans
@@ -82,6 +151,7 @@ export async function getAllPlans(req, res) {
     });
   }
 }
+
 
 // get all active plans
 export async function getAllActivePlans(req, res) {
@@ -140,6 +210,77 @@ export async function getAllActivePlans(req, res) {
     });
   }
 }
+
+// export async function getAllActivePlans(req, res) {
+//   const ownerId = req.user._id; 
+//   const isOwner = req.user.roleId === '676e3938d0f5a92c824fc662';  
+
+//   try {
+//     let match = [
+//       {
+//         $match: {
+//           status: 1  
+//         }
+//       }
+//     ];
+
+//     if (isOwner) {
+//       match.push({
+//         $match: {
+//           createdById: new mongoose.Types.ObjectId(ownerId) 
+//         }
+//       });
+//     }
+
+//     const plans = await PlansMapping.aggregate([
+//       ...match,
+//       {
+//         $lookup: {
+//           from: 'tbl_plans_mstrs',
+//           localField: 'planId',
+//           foreignField: '_id',
+//           as: 'plan'
+//         }
+//       },
+//       {
+//         $unwind: '$plan'
+//       },
+//       {
+//         $lookup: {
+//           from: 'tbl_month_mstrs',
+//           localField: 'monthId',
+//           foreignField: '_id',
+//           as: 'month'
+//         }
+//       },
+//       {
+//         $unwind: '$month'
+//       },
+//       {
+//         $project: {
+//           _id: 1,
+//           amount: 1,
+//           status: 1,
+//           monthId: 1,
+//           planId: 1,
+//           plan: '$plan.planName',
+//           month: '$month.monthName'
+//         }
+//       }
+//     ]);
+
+//     return res.status(200).json({
+//       success: true,
+//       data: plans
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message
+//     });
+//   }
+// }
+
 
 // get plan by id
 export async function getPlanById(req, res) {
@@ -243,13 +384,77 @@ export async function deletePlanById(req, res) {
 }
 
 // get planMapping by monthId and planId
-// export async function getPlanMappingByMonthAndPlanId(req, res) {
-//   const { id } = req.query;
+export async function getPlanMappingByMonthAndPlanId(req, res) {
+  const { id } = req.query;
+  try {
+    const match = [
+      {
+        $match: {
+          _id: new mongoose.Types.ObjectId(id)
+        }
+      }
+    ];
+    const planMapping = await PlansMapping.aggregate([
+      ...match,
+      {
+        $lookup: {
+          from: 'tbl_plans_mstrs',
+          localField: 'planId',
+          foreignField: '_id',
+          as: 'plan'
+        }
+      },
+      {
+        $unwind: '$plan'
+      },
+      {
+        $lookup: {
+          from: 'tbl_month_mstrs',
+          localField: 'monthId',
+          foreignField: '_id',
+          as: 'month'
+        }
+      },
+      {
+        $unwind: '$month'
+      },
+      {
+        $project: {
+          _id: 1,
+          amount: 1,
+          status: 1,
+          monthId: 1,
+          planId: 1,
+          plan: '$plan.planName',
+          month: '$month.monthName'
+        }
+      }
+    ]);
+    if (!planMapping) {
+      return res.status(404).json({
+        success: false,
+        message: 'Plan Mapping not found'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: planMapping[0]
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+}
+
+// export async function getAllPlanMappingActive(req, res) {
 //   try {
 //     const match = [
 //       {
 //         $match: {
-//           _id: new mongoose.Types.ObjectId(id)
+//           status: 1
 //         }
 //       }
 //     ];
@@ -298,7 +503,7 @@ export async function deletePlanById(req, res) {
 
 //     return res.status(200).json({
 //       success: true,
-//       data: planMapping[0]
+//       data: planMapping
 //     });
 //   } catch (error) {
 //     return res.status(500).json({
@@ -308,69 +513,29 @@ export async function deletePlanById(req, res) {
 //   }
 // }
 
-export async function getPlanMappingByMonthAndPlanId(req, res) {
-  const { id, amount, percents } = req.body; // Extract data from body
-  try {
-    // Aggregate pipeline to fetch the data
-    const planMapping = await Month.aggregate([
-      {
-        $match: {
-          id: new mongoose.Types.ObjectId(id) // Match by monthId
-        }
-      },
-      {
-        $lookup: {
-          from: 'tbl_month_mstrs', // Join with month collection
-          localField: 'monthId',
-          foreignField: '_id',
-          as: 'month'
-        }
-      },
-      {
-        $unwind: '$month' // Flatten the month array
-      },
-      {
-        $project: {
-          _id: 0, // Exclude _id from the result
-          month: '$month.monthName',
-          amount: {
-            $add: [amount, { $multiply: [amount, percents / 100] }] // Calculate amount with percents
-          }
-        }
-      }
-    ]);
-
-    if (!planMapping.length) {
-      return res.status(404).json({
-        success: false,
-        message: 'No data found for the given monthId'
-      });
-    }
-
-    // Response as an array
-    return res.status(200).json({
-      success: true,
-      data: planMapping
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-}
-
-
-
 export async function getAllPlanMappingActive(req, res) {
+  const ownerId = req.user._id;   
+  const isOwner = req.user.roleId === '676e3938d0f5a92c824fc662';  
+
   try {
+     
     const match = [
       {
         $match: {
-          status: 1
+          status: 1 
         }
       }
     ];
+
+     
+    if (isOwner) {
+      match.push({
+        $match: {
+          createdById: new mongoose.Types.ObjectId(ownerId)  
+        }
+      });
+    }
+
     const planMapping = await PlansMapping.aggregate([
       ...match,
       {
@@ -407,10 +572,11 @@ export async function getAllPlanMappingActive(req, res) {
         }
       }
     ]);
-    if (!planMapping) {
+
+    if (!planMapping || planMapping.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Plan Mapping not found'
+        message: 'No active plan mappings found'
       });
     }
 

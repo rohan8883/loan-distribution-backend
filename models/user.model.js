@@ -8,6 +8,9 @@ const UserSchema = new Schema(
       type: String,
       require: true
     },
+    gymName: {
+      type: String,
+    },
     roleId: {
       type: Schema.Types.ObjectId,
       ref: 'tbl_roles_mstrs',

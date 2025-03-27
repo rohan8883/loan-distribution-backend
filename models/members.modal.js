@@ -48,6 +48,12 @@ const MemberSchema = new Schema(
         path: '_id'
       }
     ],
+    createdById: {
+        type: Schema.Types.ObjectId,
+        ref: 'users',
+        path: '_id'
+      }
+    ,
     status: {
       type: Number,
       default: 1

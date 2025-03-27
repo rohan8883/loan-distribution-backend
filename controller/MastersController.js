@@ -1,9 +1,12 @@
 import PlanMaster from '../models/planMaster.model.js';
 import MonthMaster from '../models/monthMaster.model.js';
 import Joi from 'joi';
+import mongoose from 'mongoose';
 
 // crete plan master
 export async function CreatePlanMaster(req, res) {
+  const ownerId = req.user._id;
+  
   const { planName } = req.body;
   try {
     const schema = Joi.object({
@@ -14,7 +17,8 @@ export async function CreatePlanMaster(req, res) {
         .label('planName is not more than 50 characters')
     });
     const newPlan = new PlanMaster({
-      planName
+      planName,
+      createdById:ownerId,
     });
     const { error } = schema.validate(req.body);
     if (error) {
@@ -38,9 +42,29 @@ export async function CreatePlanMaster(req, res) {
 }
 
 // get all plans
+// export async function getAllPlans(req, res) {
+//   try {
+//     const plans = await PlanMaster.find();
+//     return res.status(200).json({
+//       success: true,
+//       data: plans
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message
+//     });
+//   }
+// }
+
 export async function getAllPlans(req, res) {
+  const ownerId = req.user._id;  
+  const isOwner = req.user.roleId === '676e3938d0f5a92c824fc662';  
+
   try {
-    const plans = await PlanMaster.find();
+    const query = isOwner ? { createdById: ownerId } : {};
+    const plans = await PlanMaster.find(query);
+
     return res.status(200).json({
       success: true,
       data: plans
@@ -53,10 +77,39 @@ export async function getAllPlans(req, res) {
   }
 }
 
+
+
+
 // get all active plans
+// export async function getAllActivePlans(req, res) {
+//   try {
+//     const plans = await PlanMaster.find({ status: 1 });
+//     return res.status(200).json({
+//       success: true,
+//       data: plans
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message
+//     });
+//   }
+// }
 export async function getAllActivePlans(req, res) {
+  const ownerId = req.user._id;  
+  const isOwner = req.user.roleId === '676e3938d0f5a92c824fc662';  
+
   try {
-    const plans = await PlanMaster.find({ status: 1 });
+    const query = {
+      status: 1 
+    };
+
+    if (isOwner) {
+      query.createdById = new mongoose.Types.ObjectId(ownerId);
+    }
+
+    const plans = await PlanMaster.find(query);
+
     return res.status(200).json({
       success: true,
       data: plans
@@ -68,6 +121,8 @@ export async function getAllActivePlans(req, res) {
     });
   }
 }
+
+
 
 // get plan by id
 export async function getPlanById(req, res) {
@@ -167,18 +222,20 @@ export async function deletePlanById(req, res) {
 // ============================ Month Master ============================
 // crete month master
 export async function CreateMonthMaster(req, res) {
+  // const ownerId = req.user._id;
   const { monthName } = req.body;
   try {
-    const monthCheck = await MonthMaster.findOne({ monthName });
-    if (monthCheck) {
-      return res.status(200).json({
-        success: false,
-        message: 'Month already exists'
-      });
-    }
+    // const monthCheck = await MonthMaster.findOne({ monthName });
+    // if (monthCheck) {
+    //   return res.status(200).json({
+    //     success: false,
+    //     message: 'Month already exists'
+    //   });
+    // }
 
     const newMonth = new MonthMaster({
-      monthName
+      monthName,
+      // createdById:ownerId,
     });
 
     await newMonth.save();
@@ -198,7 +255,10 @@ export async function CreateMonthMaster(req, res) {
 
 // get all months
 export async function getAllMonths(req, res) {
+  // const ownerId = req.user._id;  
+  // const isOwner = req.user.roleId === '676e3938d0f5a92c824fc662'; 
   try {
+    // const query = isOwner ? { createdById: ownerId } : {};
     const months = await MonthMaster.find();
     return res.status(200).json({
       success: true,
@@ -215,7 +275,7 @@ export async function getAllMonths(req, res) {
 // get all active months
 export async function getAllActiveMonths(req, res) {
   try {
-    const months = await MonthMaster.find({ status: 1 });
+    const months = await MonthMaster.find({ status: 1});
     return res.status(200).json({
       success: true,
       data: months
@@ -227,6 +287,28 @@ export async function getAllActiveMonths(req, res) {
     });
   }
 }
+// export async function getAllActiveMonths(req, res) {
+//   // const ownerId = req.user._id; 
+//   // const isOwner = req.user.roleId === '676e3938d0f5a92c824fc662';
+//   try {
+//     const query = {
+//       status: 1  
+//     };
+//     // if (isOwner) {
+//     //   query.createdById = new mongoose.Types.ObjectId(ownerId);
+//     // }
+//     const months = await MonthMaster.find();
+//     return res.status(200).json({
+//       success: true,
+//       data: months
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message
+//     });
+//   }
+// }
 
 // get month by id
 export async function getMonthById(req, res) {

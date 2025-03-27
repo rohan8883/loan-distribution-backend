@@ -96,20 +96,19 @@ export const otpTemplate = ({
         <div class="invoice-box">
             <div style="display: flex;justify-content: center;align-items: center;">
                 <div><img style="width: 30px;"
-                        src="https://jharkhandegovernance.com/dms/uploads/1724477856583-46652771.png"
+                        src="https://i.ibb.co/9tw8CZn/Gym.png"
                         style="width: 100%; max-width: 300px" alt="logo" /> </div>
-                <div style="font-weight: bold;color: black; font-size: 20px; padding-left: 4px;text-align: center;">Jharkhand Grievance
-                    Redressal</div>
+                <div style="font-weight: bold;color: black; font-size: 20px; padding-left: 4px;text-align: center;">GymSphere</div>
             </div>
 
 
 
-            <p style="color: gray;text-align: center    ;">OTP for Jharkhand Public Grievance is ${otp}</p>
+            <p style="color: gray;text-align: center    ;">Welcome to GymSphere! Use OTP ${otp} to complete your registration</p>
         </div>
 
         <div style="margin-top: 20px; text-align: center;">
             <p style="color: gray; font-style: italic;">For more details, please visit <a
-                    href="https://jharkhandegovernance.com//">https://jharkhandegovernance.com/</a></p>
+                    href="https://gymsphere.algoworks//">https://gymsphere.algoworks/</a></p>
         </div>
         <div style="margin-top: 20px; text-align: center;">
             <p style="color: gray; font-style: italic;">Please do not reply to this email.</p>

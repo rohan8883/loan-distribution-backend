@@ -46,6 +46,11 @@ const SubscriptionSchema = new Schema(
       type: Number,
       default: 0
     },
+    createdById: {
+      type: Schema.Types.ObjectId,
+      ref: 'users',
+      path: '_id',
+    },
     expInStatus: {
       type: Number,
       default: 0

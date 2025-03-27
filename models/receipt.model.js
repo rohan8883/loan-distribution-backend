@@ -7,6 +7,11 @@ const ReceiptSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'tbl_members' // Refers to GymMembers model
     },
+    createdById: {
+      type: Schema.Types.ObjectId,
+      ref: 'users',
+      path: '_id'
+    },
     subscriptionId: {
       type: Array,
       default: []

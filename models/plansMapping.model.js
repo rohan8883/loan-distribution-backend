@@ -16,6 +16,11 @@ const PlansMappingSchema = new Schema(
       ref: 'tbl_month_mstrs',
       required: true
     },
+    createdById: {
+      type: Schema.Types.ObjectId,
+      ref: 'users',
+      path: '_id'
+    },
     amount: {
       type: Number,
       required: true
