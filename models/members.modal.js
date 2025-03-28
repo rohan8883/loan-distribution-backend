@@ -41,13 +41,13 @@ const MemberSchema = new Schema(
     fullImgUrl: {
       type: String
     },
-    planMappingId: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: 'tbl_plans_mappings',
-        path: '_id'
-      }
-    ],
+    // planMappingId: [
+    //   {
+    //     type: Schema.Types.ObjectId,
+    //     ref: 'tbl_plans_mappings',
+    //     path: '_id'
+    //   }
+    // ],
     createdById: {
         type: Schema.Types.ObjectId,
         ref: 'users',

@@ -1,7 +1,6 @@
 import rootRouter from 'express';
 import {
   authMiddleWare,
-  authCookieMiddleware
 } from '../../middleware/_middleware.js';
 import authRoutes from './AuthRoutes.js';
 import usersRoutes from './UsersRoutes.js';
@@ -14,6 +13,7 @@ import masterRoutes from './mastersRoutes.js';
 import reportRoutes from './report.js';
 import guestRoutes from './guestRoutes.js';
 import changePassword from './ChangepasswordRoute.js'
+import provideLoan from './LoanRoutes.js'
 
 const router = rootRouter.Router({ mergeParams: true });
 
@@ -33,5 +33,6 @@ router.use('/subscription', subscriptionRoutes);
 router.use('/masters', masterRoutes);
 router.use('/report', reportRoutes);
 router.use('/change-pass', changePassword);
+router.use('/provide-loan', provideLoan);
 
 export default router;

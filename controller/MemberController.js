@@ -8,6 +8,7 @@ import moment from 'moment';
 import { hash } from '../utils/index.js';
 import mongoose from 'mongoose';
 import * as dotenv from 'dotenv';
+import Loan from '../models/loan.model.js';
 
 dotenv.config();
   
@@ -237,35 +238,27 @@ export const updateOwnerStatusById = async(req, res) =>{
   }
 }
 
+
 export const createMemberNew = async (req, res) => {
   const ownerId = req.user._id;
   const upload = await uploadFile('./uploads/profile');
+
   try {
     await upload.single('imageUrl')(req, res, async (err) => {
       if (err) {
         return res.status(200).json({ message: err.message });
       }
-      const {
-        memberName,
-        address,
-        mobile,
-        dob,
-        email,
-        gender,
-        weight,
-        planMappingId
-      } = req.body;
 
-      const memberExists = await Member.findOne({
-        mobile: mobile
-      });
+      const { memberName, address, mobile, dob, email, gender, weight, amount, interestRate, durationMonths } = req.body;
+
+      const memberExists = await Member.findOne({ mobile: mobile });
       if (memberExists) {
         return res.status(200).json({
           message: 'Member already exists with this mobile number',
           success: false
         });
       }
- 
+
       const hashPassword = await hash(String('123456'));
       const user = new User({
         fullName: memberName,
@@ -275,22 +268,19 @@ export const createMemberNew = async (req, res) => {
         password: hashPassword,
         imageUrl: req?.file?.filename,
         address,
-        // createdById:usersId,
         fullImgUrl: `${process.env.BACKEND_URL}/${req?.file?.filename}`
       });
       const newUser = await user.save();
       const userId = newUser._id;
       if (!userId) {
-        return res
-          .status(200)
-          .json({ message: 'User not created', success: false });
+        return res.status(200).json({ message: 'User not created', success: false });
       }
 
-      const generated = await Member.find({createdById:ownerId}).countDocuments();
+      const generated = await Member.find({ createdById: ownerId }).countDocuments();
       const generatedCode =
-        gender == 'male'
+        gender === 'male'
           ? `M-${('0000' + (generated + 1)).slice(-5)}`
-          : gender == 'female'
+          : gender === 'female'
             ? `F-${('0000' + (generated + 1)).slice(-5)}`
             : `O-${('0000' + (generated + 1)).slice(-5)}`;
 
@@ -303,17 +293,35 @@ export const createMemberNew = async (req, res) => {
         dob,
         email,
         gender,
-        createdById:ownerId,
-        planMappingId: JSON.parse(planMappingId),
+        createdById: ownerId,
         weight,
         imageUrl: req?.file?.filename,
         fullImgUrl: `${process.env.BACKEND_URL}/${req.file?.filename}`
       });
+
       await member.save();
+
+      // Loan creation logic
+      const monthlyInterestRate = (interestRate / 100) / 12;
+      const totalAmountDue = amount * Math.pow(1 + monthlyInterestRate, durationMonths);
+      const monthlyPayment = totalAmountDue / durationMonths;
+
+      const newLoan = new Loan({
+        user:userId,  // Associate the loan with the created user
+        amount,
+        interestRate,
+        durationMonths,
+        totalAmountDue,
+        monthlyPayment,
+        createdById: ownerId, // Store owner ID here
+      });
+
+      await newLoan.save();
+
       return res.status(201).json({
-        message: 'Member created',
+        message: 'Member and loan created successfully',
         success: true,
-        data: member
+        data: { member, loan: newLoan }
       });
     });
   } catch (error) {
@@ -321,7 +329,10 @@ export const createMemberNew = async (req, res) => {
   }
 };
 
+
+
 // get all members with pagination aggregate query q=
+
 export const getAllMembers = async (req, res) => {
   const ownerId = req.user._id;
   const { page = 1, limit = 10, q, status } = req.query;
