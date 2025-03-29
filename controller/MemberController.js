@@ -249,7 +249,7 @@ export const createMemberNew = async (req, res) => {
         return res.status(200).json({ message: err.message });
       }
 
-      const { memberName, address, mobile, dob, email, gender, weight, amount, interestRate, durationMonths } = req.body;
+      const { memberName, address, mobile, dob, email, gender, weight, amount, interestRate, durationMonths , startDate } = req.body;
 
       const memberExists = await Member.findOne({ mobile: mobile });
       if (memberExists) {
@@ -303,19 +303,34 @@ export const createMemberNew = async (req, res) => {
 
       // Loan creation logic
       const monthlyInterestRate = (interestRate / 100) / 12;
-      const totalAmountDue = amount * Math.pow(1 + monthlyInterestRate, durationMonths);
-      const monthlyPayment = totalAmountDue / durationMonths;
-
+      let monthlyPayment = amount;
+      if (monthlyInterestRate > 0) {
+        const numerator = monthlyInterestRate * Math.pow(1 + monthlyInterestRate, durationMonths);
+        const denominator = Math.pow(1 + monthlyInterestRate, durationMonths) - 1;
+        monthlyPayment = amount * (numerator / denominator);
+      } else {
+        // If interest rate is 0, just divide the principal by the number of months
+        monthlyPayment = amount / durationMonths;
+      }
+      
+      const totalAmountDue = monthlyPayment * durationMonths;
+  
+      // Create loan start date (either provided or current date)
+      const loanStartDate = startDate ? new Date(startDate) : new Date();
+  
       const newLoan = new Loan({
-        user:userId,  // Associate the loan with the created user
+        userId,
         amount,
         interestRate,
+        startDate: loanStartDate,
         durationMonths,
         totalAmountDue,
         monthlyPayment,
-        createdById: ownerId, // Store owner ID here
+        remainingBalance: totalAmountDue,
+        createdById: ownerId,
+        status: 'approved', // You might want to change this based on your workflow
       });
-
+  
       await newLoan.save();
 
       return res.status(201).json({
