@@ -11,7 +11,7 @@ import * as dotenv from 'dotenv';
 import Loan from '../models/loan.model.js';
 
 dotenv.config();
-  
+
 // env of multi user db ====>   mongodb+srv://rohansingh9135:Rohan!123!456@cluster0.irrxqdp.mongodb.net/multiusergymdb?retryWrites=true&w=majority&appName=Cluster0
 
 
@@ -213,7 +213,7 @@ export const updateOwnerById = async (req, res) => {
   }
 };
 
-export const updateOwnerStatusById = async(req, res) =>{
+export const updateOwnerStatusById = async (req, res) => {
   const { id } = req.params;
   try {
     const owner = await User.findById(id);
@@ -249,7 +249,7 @@ export const createMemberNew = async (req, res) => {
         return res.status(200).json({ message: err.message });
       }
 
-      const { memberName, address, mobile, dob, email, gender, weight, amount, interestRate, durationMonths , startDate } = req.body;
+      const { memberName, address, mobile, email, gender, amount, interestRate, durationMonths, startDate, loanType } = req.body;
 
       const memberExists = await Member.findOne({ mobile: mobile });
       if (memberExists) {
@@ -290,11 +290,11 @@ export const createMemberNew = async (req, res) => {
         memberName,
         address,
         mobile,
-        dob,
+        // dob,
         email,
         gender,
         createdById: ownerId,
-        weight,
+        // weight,
         imageUrl: req?.file?.filename,
         fullImgUrl: `${process.env.BACKEND_URL}/${req.file?.filename}`
       });
@@ -312,15 +312,26 @@ export const createMemberNew = async (req, res) => {
         // If interest rate is 0, just divide the principal by the number of months
         monthlyPayment = amount / durationMonths;
       }
-      
+
       const totalAmountDue = monthlyPayment * durationMonths;
-  
+
       // Create loan start date (either provided or current date)
       const loanStartDate = startDate ? new Date(startDate) : new Date();
-  
+
+      // Generate a unique loan number (e.g., LN-2024-1001)
+      const generateLoanNumber = () => {
+        const today = new Date();
+        const year = today.getFullYear();
+        const randomNum = Math.floor(1000 + Math.random() * 9000); // 4-digit random
+        return `LN-${year}-${randomNum}`;
+      };
+      const loanNumber = generateLoanNumber();
+
       const newLoan = new Loan({
         userId,
         amount,
+        loanNumber,
+        loanType,
         interestRate,
         startDate: loanStartDate,
         durationMonths,
@@ -330,7 +341,7 @@ export const createMemberNew = async (req, res) => {
         createdById: ownerId,
         status: 'approved', // You might want to change this based on your workflow
       });
-  
+
       await newLoan.save();
 
       return res.status(201).json({
@@ -361,7 +372,7 @@ export const getAllMembers = async (req, res) => {
         }
       }
     ];
-    if(req.user.roleId == '676e3938d0f5a92c824fc662'){
+    if (req.user.roleId == '676e3938d0f5a92c824fc662') {
       query.push({
         $match: {
           createdById: new mongoose.Types.ObjectId(ownerId)
@@ -590,12 +601,12 @@ export const getMemberById = async (req, res) => {
       }
     ]);
 
-    const userDetails = await User.findOne({_id:MemberData[0]?.createdById });
+    const userDetails = await User.findOne({ _id: MemberData[0]?.createdById });
 
     return res.status(200).json({
       success: true,
       message: 'Member found',
-      data: { ...MemberData[0], ExpStatus,userDetails }
+      data: { ...MemberData[0], ExpStatus, userDetails }
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

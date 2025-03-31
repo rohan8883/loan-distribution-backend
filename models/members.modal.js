@@ -25,16 +25,16 @@ const MemberSchema = new Schema(
       type: String,
       required: true
     },
-    weight: {
-      type: Number
-    },
+    // weight: {
+    //   type: Number
+    // },
     email: {
       type: String
     },
-    dob: {
-      type: Date,
-      required: true
-    },
+    // dob: {
+    //   type: Date,
+    //   required: true
+    // },
     imageUrl: {
       type: String
     },

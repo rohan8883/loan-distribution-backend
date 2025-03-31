@@ -7,6 +7,8 @@ const loanSchema = new Schema({
   amount: { type: Number, required: true, min: [1, 'Amount must be positive'] },
   interestRate: { type: Number, required: true, min: [0, 'Interest rate cannot be negative'] },
   startDate: { type: Date, default: Date.now },
+  loanNumber: { type: String },
+  loanType: { type: String },
   durationMonths: { type: Number, required: true, min: [1, 'Duration must be at least 1 month'] },
   totalAmountDue: { type: Number, required: true },
   monthlyPayment: { type: Number, required: true },
@@ -20,7 +22,8 @@ const loanSchema = new Schema({
     {
       amount: { type: Number, required: true },
       date: { type: Date, default: Date.now },
-      processedBy: { type: Schema.Types.ObjectId, ref: 'users' }
+      processedBy: { type: Schema.Types.ObjectId, ref: 'users' },
+      transactionNumber: { type: String }
     },
   ],
   status: { 

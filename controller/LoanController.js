@@ -1,6 +1,6 @@
 import User from '../models/user.model.js';
 import Loan from '../models/loan.model.js';
-import PaymentHistory from '../models/loanHistory.model.js'; 
+import PaymentHistory from '../models/loanHistory.model.js';
 import mongoose from 'mongoose';
 // Create "Give Loan to User"
 
@@ -12,7 +12,7 @@ export async function GetAllLoans(req, res) {
     const status = req.query.status || null;
     const sortBy = req.query.sortBy || 'createdAt';
     const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
-    
+
     // Build the aggregation pipeline
     const aggregateQuery = Loan.aggregate([
       // Match stage (for filtering)
@@ -84,7 +84,7 @@ export async function GetAllLoans(req, res) {
         $sort: { [sortBy]: sortOrder }
       }
     ]);
-    
+
     // Apply pagination using mongoose-aggregate-paginate-v2
     const options = {
       page,
@@ -94,9 +94,9 @@ export async function GetAllLoans(req, res) {
         docs: 'loans'
       }
     };
-    
+
     const result = await Loan.aggregatePaginate(aggregateQuery, options);
-    
+
     // Add summary statistics
     const summary = await Loan.aggregate([
       {
@@ -169,17 +169,17 @@ export async function GetAllLoans(req, res) {
         }
       }
     ]);
-    
+
     // Determine appropriate status message based on results
     let message = 'Loans retrieved successfully';
     if (result.totalLoans === 0) {
-      message = status 
-        ? `No loans found with status: ${status}` 
+      message = status
+        ? `No loans found with status: ${status}`
         : 'No loans found';
     } else if (status) {
       message = `Found ${result.totalLoans} loans with status: ${status}`;
     }
-    
+
     res.status(200).json({
       success: true,
       message: message,
@@ -196,7 +196,7 @@ export async function GetAllLoans(req, res) {
       loans: result.loans,
       summary: summary.length > 0 ? summary[0] : {}
     });
-    
+
   } catch (err) {
     res.status(500).json({
       status: 'error',
@@ -209,14 +209,14 @@ export async function GetAllLoans(req, res) {
 export async function GetLoanById(req, res) {
   try {
     const { id } = req.params;
-    
+
     if (!id) {
       return res.status(400).json({
         status: 'error',
         message: 'Loan ID is required'
       });
     }
-    
+
     // Validate that loanId is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -224,7 +224,7 @@ export async function GetLoanById(req, res) {
         message: 'Invalid loan ID format'
       });
     }
-    
+
     const loan = await Loan.aggregate([
       // Match the specific loan
       {
@@ -264,6 +264,8 @@ export async function GetLoanById(req, res) {
         $project: {
           _id: 1,
           amount: 1,
+          loanNumber:1,
+          loanType:1,
           interestRate: 1,
           startDate: 1,
           durationMonths: 1,
@@ -271,7 +273,21 @@ export async function GetLoanById(req, res) {
           monthlyPayment: 1,
           remainingBalance: 1,
           status: 1,
-          paymentsMade: 1,
+          paymentsMade: {
+            $map: {
+              input: { $range: [0, { $size: "$paymentsMade" }] },
+              as: "index",
+              in: {
+                $mergeObjects: [
+                  { $arrayElemAt: ["$paymentsMade", "$$index"] },
+                  {
+                    status: "paid",
+                    paymentNumber: { $add: ["$$index", 1] }
+                  }
+                ]
+              }
+            }
+          },
           lastPaymentDate: 1,
           nextPaymentDueDate: 1,
           createdAt: 1,
@@ -294,9 +310,9 @@ export async function GetLoanById(req, res) {
                 status: {
                   $cond: {
                     if: {
-                      $lt: [
-                        { $add: ['$$month', 1] },
-                        { $size: { $ifNull: ['$paymentsMade', []] } }
+                      $lte: [
+                        { $add: ['$$month', 1] },  // paymentNumber
+                        { $size: { $ifNull: ['$paymentsMade', []] } }  // Number of payments made
                       ]
                     },
                     then: 'paid',
@@ -311,37 +327,36 @@ export async function GetLoanById(req, res) {
             name: '$userDetails.fullName',
             email: '$userDetails.email',
             phone: '$userDetails.mobile',
-            // Add other user fields you want to include
+            address: '$userDetails.address',
           },
           creator: {
             _id: '$creatorDetails._id',
             name: '$creatorDetails.name',
-            // Add other creator fields you want to include
           }
         }
       }
     ]);
-    
+
     if (!loan || loan.length === 0) {
       return res.status(404).json({
         status: 'error',
         message: `Loan with ID ${id} not found`
       });
     }
-    
+
     // Calculate summary information
     const totalPaid = loan[0].paymentsMade.reduce((sum, payment) => sum + payment.amount, 0);
     const remainingBalance = Math.max(0, loan[0].totalAmountDue - totalPaid);
-    
+
     // Calculate progress percentage
     const progressPercentage = (totalPaid / loan[0].totalAmountDue) * 100;
-    
+
     // Determine if the loan is on track
     const today = new Date();
     const monthsSinceStart = Math.floor((today - new Date(loan[0].startDate)) / (30 * 24 * 60 * 60 * 1000));
     const expectedPaymentsSoFar = Math.min(monthsSinceStart, loan[0].durationMonths) * loan[0].monthlyPayment;
     const isOnTrack = totalPaid >= (expectedPaymentsSoFar - loan[0].monthlyPayment);
-    
+
     // Prepare status message based on loan status
     let message = `Loan details retrieved successfully`;
     if (loan[0].status === 'paid') {
@@ -351,7 +366,34 @@ export async function GetLoanById(req, res) {
     } else if (loan[0].status === 'pending' && isOnTrack) {
       message = `Loan is in good standing. Next payment due: ${loan[0].nextPaymentDueDate.toLocaleDateString()}`;
     }
-    
+
+    // Calculate remaining payments count
+    const remainingPaymentsCount = loan[0].durationMonths - loan[0].paymentsMade.length;
+
+    // Get upcoming payments (both due and pending)
+    const upcomingPayments = [];
+
+    if (remainingPaymentsCount > 0) {
+      const nextPaymentIndex = loan[0].paymentsMade.length;
+      const paymentsToShow = Math.min(remainingPaymentsCount, 3);
+
+      for (let i = 0; i < paymentsToShow; i++) {
+        const paymentNumber = nextPaymentIndex + i + 1;
+        const dueDate = new Date(loan[0].startDate);
+        dueDate.setMonth(dueDate.getMonth() + nextPaymentIndex + i);
+
+        const status = i === 0 ? 'due' : 'pending';
+
+        upcomingPayments.push({
+          paymentNumber,
+          date: dueDate,
+          amount: loan[0].monthlyPayment,
+          status
+        });
+      }
+    }
+
+    // Response with repayment progress included
     res.status(200).json({
       success: true,
       message: message,
@@ -359,14 +401,16 @@ export async function GetLoanById(req, res) {
       summary: {
         totalPaid,
         remainingBalance,
-        progressPercentage: progressPercentage.toFixed(2),
+        repaymentProgress: parseFloat(progressPercentage.toFixed(2)), // Numeric value (e.g., 45.67)
+        repaymentProgressDisplay: `${progressPercentage.toFixed(2)}%`, // Formatted string (e.g., "45.67%")
         isOnTrack,
         paymentsMade: loan[0].paymentsMade.length,
-        remainingPayments: loan[0].durationMonths - loan[0].paymentsMade.length,
-        nextPaymentDue: loan[0].nextPaymentDueDate
+        remainingPayments: remainingPaymentsCount,
+        nextPaymentDue: loan[0].nextPaymentDueDate,
+        upcomingPayments: upcomingPayments
       }
     });
-    
+
   } catch (err) {
     res.status(500).json({
       status: 'error',
@@ -375,12 +419,20 @@ export async function GetLoanById(req, res) {
     });
   }
 }
+// Function to generate a transaction number
 
+
+function generateTransactionNumber() {
+  const prefix = 'TXN';
+  const timestamp = Date.now().toString().slice(-10);
+  const randomDigits = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `${prefix}${timestamp}${randomDigits}`;
+}
 export async function MakeLoanPayment(req, res) {
   try {
     const { loanId, paymentAmount } = req.body;
     const processedBy = req?.user?._id;
-    
+
     // Validate loan ID
     if (!loanId) {
       return res.status(400).json({
@@ -388,14 +440,14 @@ export async function MakeLoanPayment(req, res) {
         message: 'Loan ID is required'
       });
     }
-    
+
     if (!mongoose.Types.ObjectId.isValid(loanId)) {
       return res.status(400).json({
         status: 'error',
         message: 'Invalid loan ID format'
       });
     }
-    
+
     // Find the loan
     const loan = await Loan.findById(loanId);
     if (!loan) {
@@ -404,46 +456,48 @@ export async function MakeLoanPayment(req, res) {
         message: 'Loan not found'
       });
     }
-    
+
     // Validate payment amount
     if (!paymentAmount || paymentAmount <= 0) {
-      return res.status(400).json({
-        status: 'error',
+      return res.status(200).json({
+        success: false,
         message: 'Invalid payment amount'
       });
     }
-    
+
     // Check if payment amount is at least the monthly payment
     if (paymentAmount < loan.monthlyPayment) {
-      return res.status(400).json({ 
-        status: 'error',
-        message: `Payment amount must be at least the monthly payment of ${loan.monthlyPayment.toFixed(2)}` 
+      return res.status(200).json({
+        success: false,
+        message: `Payment amount must be at least the monthly payment of ${loan.monthlyPayment.toFixed(2)}`
       });
     }
-    
+    // Generate a transaction number
+    const transactionNumber = generateTransactionNumber();
     // Add the payment to paymentsMade array
     loan.paymentsMade.push({
       amount: paymentAmount,
       date: new Date(),
-      processedBy
+      processedBy,
+      transactionNumber
     });
-    
+
     // Calculate total paid so far
     const totalPaid = loan.paymentsMade.reduce((sum, payment) => sum + payment.amount, 0);
-    
+
     // Update remaining balance
     loan.remainingBalance = Math.max(0, loan.totalAmountDue - totalPaid);
-    
+
     // Update lastPaymentDate
     loan.lastPaymentDate = new Date();
-    
+
     // Calculate next payment due date
     if (loan.paymentsMade.length < loan.durationMonths) {
       const startDate = new Date(loan.startDate);
       loan.nextPaymentDueDate = new Date(startDate);
       loan.nextPaymentDueDate.setMonth(startDate.getMonth() + loan.paymentsMade.length + 1);
     }
-    
+
     // Update loan status
     if (totalPaid >= loan.totalAmountDue) {
       loan.status = 'paid';
@@ -452,16 +506,16 @@ export async function MakeLoanPayment(req, res) {
       // Check if there are any overdue payments
       const monthsSinceStart = Math.floor((new Date() - loan.startDate) / (30 * 24 * 60 * 60 * 1000));
       const expectedPaymentsSoFar = Math.min(monthsSinceStart, loan.durationMonths) * loan.monthlyPayment;
-      
+
       if (totalPaid < expectedPaymentsSoFar - loan.monthlyPayment) {
         loan.status = 'overdue';
       } else {
         loan.status = 'active';
       }
     }
-    
+
     await loan.save();
-    
+
     // Prepare appropriate message based on loan status
     let message = 'Payment processed successfully';
     if (loan.status === 'paid') {
@@ -471,17 +525,18 @@ export async function MakeLoanPayment(req, res) {
     } else {
       message = `Payment of ${paymentAmount.toFixed(2)} processed successfully. Remaining balance: ${loan.remainingBalance.toFixed(2)}`;
     }
-    
+
     // Calculate progress percentage
     const progressPercentage = (totalPaid / loan.totalAmountDue) * 100;
-    
+
     res.status(200).json({
-      status: 'success',
+      success: true,
       message: message,
       payment: {
         amount: paymentAmount,
         date: new Date(),
-        loanId: loan._id
+        loanId: loan._id,
+        transactionNumber: transactionNumber
       },
       loanUpdate: {
         _id: loan._id,
@@ -494,10 +549,10 @@ export async function MakeLoanPayment(req, res) {
         nextPaymentDue: loan.nextPaymentDueDate
       }
     });
-    
+
   } catch (err) {
     res.status(500).json({
-      status: 'error',
+      success: false,
       message: 'Error processing payment',
       error: err.message
     });
