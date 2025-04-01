@@ -290,6 +290,13 @@ export async function GetLoanById(req, res) {
           },
           lastPaymentDate: 1,
           nextPaymentDueDate: 1,
+          loanEndDate: {
+            $dateAdd: {
+              startDate: '$startDate',
+              unit: 'month',
+              amount: '$durationMonths'
+            }
+          },
           createdAt: 1,
           updatedAt: 1,
           // Payment schedule calculation
@@ -407,6 +414,7 @@ export async function GetLoanById(req, res) {
         paymentsMade: loan[0].paymentsMade.length,
         remainingPayments: remainingPaymentsCount,
         nextPaymentDue: loan[0].nextPaymentDueDate,
+        loanEndDate: loan[0].loanEndDate, 
         upcomingPayments: upcomingPayments
       }
     });
